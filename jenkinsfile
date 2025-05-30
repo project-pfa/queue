@@ -1,0 +1,38 @@
+pipeline {
+    agent any
+    environment {
+        REGISTRY = 'localhost:5000'
+        IMAGE_NAME = 'queue'
+        DEPLOYMENT_FILE = '/home/admin13/queue.yaml'  // Chemin de ton fichier de déploiement
+    }
+    stages {
+        stage('Preparation') {
+            steps {
+                checkout scm
+                sh 'git rev-parse --short HEAD > .git/commit-id'
+                script {
+                    commit_id = readFile('.git/commit-id').trim()
+                }
+            }
+        }
+        stage('Image Build') {
+            steps {
+                echo 'Building docker image...'
+                sh "docker build -t ${REGISTRY}/${IMAGE_NAME}:${commit_id} ."
+                echo 'build complete'
+                echo 'pushing docker image to registry...'
+                sh "docker push ${REGISTRY}/${IMAGE_NAME}:${commit_id}"
+                echo 'push complete'
+            }
+        }
+        stage('Deploy to Minikube') {
+            steps {
+                echo 'Deploying to Minikube'
+                sh "minikube image load ${REGISTRY}/${IMAGE_NAME}:${commit_id}"
+                sh "kubectl set image deployment/queue queue=${REGISTRY}/${IMAGE_NAME}:${commit_id} --namespace=k8s-fleetman"
+                sh "kubectl apply -f ${DEPLOYMENT_FILE}"
+                echo 'deployment complete'
+            }
+        }
+    }
+}
