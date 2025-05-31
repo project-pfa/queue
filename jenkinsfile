@@ -1,10 +1,8 @@
+def commit_id
+
 pipeline {
     agent any
-    environment {
-        REGISTRY = 'localhost:5000'
-        IMAGE_NAME = 'queue'
-        DEPLOYMENT_FILE = '/home/admin13/queue.yaml'  // Chemin de ton fichier de déploiement
-    }
+
     stages {
         stage('Preparation') {
             steps {
@@ -15,24 +13,20 @@ pipeline {
                 }
             }
         }
-        stage('Image Build') {
+
+        stage('Deploy') {
             steps {
-                echo 'Building docker image...'
-                sh "docker build -t ${REGISTRY}/${IMAGE_NAME}:${commit_id} ."
-                echo 'build complete'
-                echo 'pushing docker image to registry...'
-                sh "docker push ${REGISTRY}/${IMAGE_NAME}:${commit_id}"
-                echo 'push complete'
-            }
-        }
-        stage('Deploy to Minikube') {
-            steps {
-                echo 'Deploying to Minikube'
-                sh "minikube image load ${REGISTRY}/${IMAGE_NAME}:${commit_id}"
-                sh "kubectl set image deployment/queue queue=${REGISTRY}/${IMAGE_NAME}:${commit_id} --namespace=k8s-fleetman"
-                sh "kubectl apply -f ${DEPLOYMENT_FILE}"
-                echo 'deployment complete'
+                echo 'Starting Minikube if not running...'
+                sh 'minikube status || minikube start '
+                echo 'Setting kubectl context to Minikube...'
+                sh 'kubectl config use-context minikube'
+                echo 'Deploying to Minikube...'
+                sh "sed -i 's/commit_id/${commit_id}/g' ./manifests/queue.yaml"
+                sh "kubectl get all"
+                sh "kubectl apply -f ./manifests/"
+                echo 'Deployment complete'
             }
         }
     }
 }
+
